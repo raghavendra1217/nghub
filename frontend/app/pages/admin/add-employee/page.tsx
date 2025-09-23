@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
+import AdminNavbar from '../../../components/AdminNavbar'
 
 export default function AddEmployee() {
   const [user, setUser] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [isDarkMode, setIsDarkMode] = useState(false)
   const [formData, setFormData] = useState({
     employee_id: '',
     name: '',
@@ -16,6 +18,7 @@ export default function AddEmployee() {
     role: 'employee'
   })
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const router = useRouter()
 
@@ -109,8 +112,21 @@ export default function AddEmployee() {
       const data = await response.json()
 
       if (response.ok) {
-        // Redirect back to employee management
-        router.push('/pages/admin/employees')
+        setSuccess('Employee added successfully!')
+        // Reset form
+        setFormData({
+          employee_id: '',
+          name: '',
+          email: '',
+          contact: '',
+          password: '',
+          confirmPassword: '',
+          role: 'employee'
+        })
+        // Redirect after a short delay
+        setTimeout(() => {
+          router.push('/pages/admin/employees')
+        }, 2000)
       } else {
         setError(data.error || 'Failed to add employee')
       }
