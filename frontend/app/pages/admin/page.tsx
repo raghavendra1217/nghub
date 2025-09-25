@@ -38,6 +38,7 @@ export default function Admin() {
   const [claimTypeStats, setClaimTypeStats] = useState<{[key: string]: number}>({})
   const [topEmployees, setTopEmployees] = useState<any[]>([])
   const [recentActivity, setRecentActivity] = useState<any[]>([])
+  const [errorMessage, setErrorMessage] = useState('')
 
   useEffect(() => {
     const authenticateUser = async () => {
@@ -78,6 +79,20 @@ export default function Admin() {
       const token = localStorage.getItem('token')
       const headers = { 'Authorization': `Bearer ${token}` }
 
+      console.log('🔄 Fetching dashboard data...')
+
+      // First check if backend is running
+      try {
+        const healthResponse = await fetch('http://localhost:5000/api/health')
+        if (!healthResponse.ok) {
+          throw new Error('Backend server is not responding')
+        }
+        console.log('✅ Backend server is running')
+      } catch (error) {
+        console.error('❌ Backend connection failed:', error)
+        throw new Error('Cannot connect to backend server. Please make sure the backend is running on port 5000.')
+      }
+
       // Fetch all data in parallel
       const [
         employeesRes,
@@ -93,6 +108,20 @@ export default function Admin() {
         fetch('http://localhost:5000/api/claims', { headers }).catch(() => ({ json: () => ({ claims: [] }) }))
       ])
 
+      // Check if any requests failed
+      if (!employeesRes.ok) {
+        console.error('❌ Failed to fetch employees:', employeesRes.status, employeesRes.statusText)
+        throw new Error(`Failed to fetch employees: ${employeesRes.statusText}`)
+      }
+      if (!customersRes.ok) {
+        console.error('❌ Failed to fetch customers:', customersRes.status, customersRes.statusText)
+        throw new Error(`Failed to fetch customers: ${customersRes.statusText}`)
+      }
+      if (!campsRes.ok) {
+        console.error('❌ Failed to fetch camps:', campsRes.status, campsRes.statusText)
+        throw new Error(`Failed to fetch camps: ${campsRes.statusText}`)
+      }
+
       const [employeesData, customersData, campsData, cardsData, claimsData] = await Promise.all([
         employeesRes.json(),
         customersRes.json(),
@@ -100,6 +129,14 @@ export default function Admin() {
         cardsRes.json(),
         claimsRes.json()
       ])
+
+      console.log('📊 Dashboard data received:', {
+        employees: employeesData.employees?.length || 0,
+        customers: customersData.customers?.length || 0,
+        camps: campsData.camps?.length || 0,
+        cards: cardsData.cards?.length || 0,
+        claims: claimsData.claims?.length || 0
+      })
 
       // Process employees data
       const employees = employeesData.employees || []
@@ -188,7 +225,37 @@ export default function Admin() {
       setRecentActivity(activities.sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime()).slice(0, 8))
 
     } catch (error) {
-      console.error('Error fetching dashboard data:', error)
+      console.error('❌ Error fetching dashboard data:', error)
+      setErrorMessage(error.message || 'Failed to fetch dashboard data')
+      
+      // Set default values when there's an error
+      setSystemStats({
+        totalEmployees: 0,
+        totalCustomers: 0,
+        totalCamps: 0,
+        totalCards: 0,
+        totalClaims: 0
+      })
+      
+      setFinancialStats({
+        totalDiscussedAmount: 0,
+        totalPendingAmount: 0,
+        totalPaidAmount: 0,
+        discussedCount: 0,
+        pendingCount: 0,
+        paidCount: 0
+      })
+      
+      setCampStats({
+        upcoming: 0,
+        ongoing: 0,
+        completed: 0,
+        cancelled: 0
+      })
+      
+      setClaimTypeStats({})
+      setTopEmployees([])
+      setRecentActivity([])
     }
   }
 
@@ -235,6 +302,16 @@ export default function Admin() {
                     </p>
                   </div>
                   <div className="flex items-center space-x-6">
+                    <button
+                      onClick={() => fetchDashboardData()}
+                      className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                        isDarkMode 
+                          ? 'bg-blue-600 text-white hover:bg-blue-700' 
+                          : 'bg-blue-600 text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      🔄 Refresh Data
+                    </button>
                     <div className="text-center">
                       <div className={`text-3xl font-bold ${isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}>
                         {systemStats.totalEmployees}
@@ -263,6 +340,69 @@ export default function Admin() {
                 </div>
               </div>
             </div>
+
+            {/* No Data Message */}
+            {systemStats.totalEmployees === 0 && systemStats.totalCustomers === 0 && systemStats.totalCamps === 0 && (
+              <div className={`${isDarkMode ? 'bg-gray-800' : 'bg-white'} rounded-lg shadow-sm p-6 mb-8`}>
+                <div className="text-center">
+                  <div className="text-6xl mb-4">📊</div>
+                  <h3 className={`text-xl font-semibold ${isDarkMode ? 'text-white' : 'text-gray-800'} mb-2`}>
+                    No Data Available
+                  </h3>
+                  <p className={`${isDarkMode ? 'text-gray-400' : 'text-gray-600'} mb-4`}>
+                    It looks like your system is empty. Start by adding some data to see your dashboard come to life!
+                  </p>
+                  <div className="flex justify-center space-x-4">
+                    <button
+                      onClick={() => router.push('/pages/admin/add-employee')}
+                      className="px-6 py-3 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
+                    >
+                      Add Employee
+                    </button>
+                    <button
+                      onClick={() => router.push('/pages/admin/add-camp')}
+                      className="px-6 py-3 bg-green-600 text-white rounded-lg font-medium hover:bg-green-700 transition-colors"
+                    >
+                      Add Camp
+                    </button>
+                    <button
+                      onClick={() => router.push('/pages/admin/customers')}
+                      className="px-6 py-3 bg-purple-600 text-white rounded-lg font-medium hover:bg-purple-700 transition-colors"
+                    >
+                      Add Customer
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Error Message */}
+            {errorMessage && (
+              <div className="mb-8">
+                <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <strong>Error:</strong> {errorMessage}
+                    </div>
+                    <button 
+                      onClick={() => setErrorMessage('')}
+                      className="text-red-500 hover:text-red-700 ml-4"
+                    >
+                      ×
+                    </button>
+                  </div>
+                  <div className="mt-2 text-sm">
+                    <p>Possible solutions:</p>
+                    <ul className="list-disc list-inside mt-1">
+                      <li>Make sure the backend server is running on port 5000</li>
+                      <li>Check your internet connection</li>
+                      <li>Verify your authentication token is valid</li>
+                      <li>Try refreshing the page</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Financial Overview */}
             <div className="mb-8">

@@ -3,6 +3,7 @@ const { Pool } = require('pg');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cors = require('cors');
+const path = require('path');
 const { protect, authorize } = require('./middleware/authMiddleware');
 const { runPy } = require('./utils/emailRunner');
 require('dotenv').config();
@@ -32,6 +33,9 @@ pool.connect((err, client, release) => {
 app.use(cors());
 app.use(express.json());
 
+// Serve static files from React build
+app.use(express.static(path.join(__dirname, '../my-app/dist')));
+
 // Request logging middleware
 app.use((req, res, next) => {
   const timestamp = new Date().toISOString();
@@ -50,6 +54,15 @@ app.use((req, res, next) => {
 
 // JWT Secret (in production, use environment variable)
 const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key';
+
+// Health check endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ 
+    status: 'OK', 
+    message: 'Backend server is running',
+    timestamp: new Date().toISOString()
+  });
+});
 
 // Register endpoint
 app.post('/api/register', async (req, res) => {
@@ -1265,9 +1278,15 @@ app.delete('/api/claims/:id', protect, authorize('employee', 'admin'), async (re
   }
 });
 
+// Catch-all handler: send back React's index.html file for any non-API routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../my-app/dist/index.html'));
+});
+
 app.listen(PORT, () => {
   console.log('🚀 Server started successfully!');
   console.log(`📡 Backend API running at: http://localhost:${PORT}`);
+  console.log(`🌐 Frontend served at: http://localhost:${PORT}`);
   console.log(`🔗 Health check: http://localhost:${PORT}/api/health`);
   console.log('📝 Request logging enabled - all incoming requests will be displayed below:');
   console.log('─'.repeat(60));
